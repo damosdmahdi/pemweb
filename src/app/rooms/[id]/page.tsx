@@ -1,58 +1,67 @@
-import React from 'react';
-import type { Room } from '../types';
-import { Badge } from '../components/Badge';
-import { Button } from '../components/Button';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import prisma from '../../../lib/prisma';
+import { Badge } from '../../../components/Badge';
 
-export interface DetailPageProps {
-  rooms: Room[];
-  selectedRoomId: string;
-  onSelectRoomId: (id: string) => void;
-  onNavigateToCatalog: () => void;
-  onNavigateToBooking: (roomId: string) => void;
-}
+export const dynamic = 'force-dynamic';
 
-export const DetailPage: React.FC<DetailPageProps> = ({
-  rooms,
-  selectedRoomId,
-  onSelectRoomId,
-  onNavigateToCatalog,
-  onNavigateToBooking,
-}) => {
-  const currentRoom = rooms.find((r) => r.id === selectedRoomId) || rooms[0];
+export default async function RoomDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const room = await prisma.room.findUnique({
+    where: { id },
+    include: {
+      bookings: {
+        where: { status: 'CONFIRMED' },
+        orderBy: { date: 'asc' },
+      },
+    },
+  });
+
+  if (!room) {
+    notFound();
+  }
+
+  // Ambil semua ruangan lain untuk quick switcher
+  const allRooms = await prisma.room.findMany({
+    select: { id: true, name: true, floor: true, categoryLabel: true },
+    orderBy: { floor: 'asc' },
+  });
 
   return (
     <div className="space-y-6">
       {/* Tombol Kembali & Selector Ruangan Cepat */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
-        <button
-          type="button"
-          onClick={onNavigateToCatalog}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded p-1"
-          aria-label="Kembali ke halaman katalog ruangan"
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded p-1"
+          aria-label="Kembali ke katalog ruangan"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           <span>Kembali ke Katalog</span>
-        </button>
+        </Link>
 
-        {/* Quick Room Selector */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label htmlFor="quick-room-select" className="text-xs font-semibold text-slate-500 whitespace-nowrap">
-            Pilih Ruangan Lain:
-          </label>
-          <select
-            id="quick-room-select"
-            value={currentRoom.id}
-            onChange={(e) => onSelectRoomId(e.target.value)}
-            className="text-xs font-medium bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-800 w-full sm:w-auto"
-          >
-            {rooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name} (Lt. {room.floor} - {room.categoryLabel})
-              </option>
-            ))}
-          </select>
+        {/* Quick Room Switcher Links */}
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1">
+          <span className="text-xs font-semibold text-slate-500 shrink-0">Lihat Ruang Lain:</span>
+          <div className="flex gap-1.5">
+            {allRooms
+              .filter((r) => r.id !== room.id)
+              .map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/rooms/${r.id}`}
+                  className="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md shrink-0 transition-colors"
+                >
+                  {r.name} (Lt. {r.floor})
+                </Link>
+              ))}
+          </div>
         </div>
       </div>
 
@@ -63,18 +72,18 @@ export const DetailPage: React.FC<DetailPageProps> = ({
           {/* Foto Ruangan */}
           <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 aspect-video shadow-xs">
             <img
-              src={currentRoom.imageUrl}
-              alt={`Dokumentasi interior ruangan ${currentRoom.name} lantai ${currentRoom.floor}`}
+              src={room.imageUrl}
+              alt={`Dokumentasi interior ruangan ${room.name} lantai ${room.floor}`}
               className="w-full h-full object-cover"
             />
             <div className="absolute top-4 left-4 flex gap-2">
-              <Badge variant={currentRoom.available ? 'success' : 'danger'} dot>
-                {currentRoom.available ? 'Status: Siap Dipesan' : 'Status: Sedang Penuh'}
+              <Badge variant={room.available ? 'success' : 'danger'} dot>
+                {room.available ? 'Status: Siap Dipesan' : 'Status: Sedang Penuh'}
               </Badge>
-              <Badge variant="neutral">{currentRoom.categoryLabel}</Badge>
+              <Badge variant="neutral">{room.categoryLabel}</Badge>
             </div>
             <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur-xs text-white text-xs px-3 py-1.5 rounded-lg font-medium">
-              Gedung WorkNet — Lantai {currentRoom.floor}
+              Gedung WorkNet — Lantai {room.floor}
             </div>
           </div>
 
@@ -85,12 +94,12 @@ export const DetailPage: React.FC<DetailPageProps> = ({
                 Spesifikasi Ruangan
               </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
-                {currentRoom.name}
+                {room.name}
               </h1>
             </div>
 
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-              {currentRoom.description}
+              {room.description}
             </p>
 
             {/* Grid Spesifikasi Teknis */}
@@ -99,30 +108,30 @@ export const DetailPage: React.FC<DetailPageProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Luas Ruangan</span>
-                  <span className="text-sm font-bold text-slate-800">{currentRoom.specifications.area}</span>
+                  <span className="text-sm font-bold text-slate-800">{room.area}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Kapasitas Maksimal</span>
-                  <span className="text-sm font-bold text-slate-800">{currentRoom.capacity} Orang</span>
+                  <span className="text-sm font-bold text-slate-800">{room.capacity} Orang</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Koneksi Internet</span>
-                  <span className="text-sm font-bold text-slate-800">{currentRoom.specifications.wifiSpeed}</span>
+                  <span className="text-sm font-bold text-slate-800">{room.wifiSpeed}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Stopkontak Listrik</span>
-                  <span className="text-sm font-bold text-slate-800">{currentRoom.specifications.powerOutlets} Titik</span>
+                  <span className="text-sm font-bold text-slate-800">{room.powerOutlets} Titik</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Proyektor / TV</span>
                   <span className="text-sm font-bold text-slate-800">
-                    {currentRoom.specifications.hasProjector ? 'Tersedia' : 'Tidak Ada'}
+                    {room.hasProjector ? 'Tersedia' : 'Tidak Ada'}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-xs text-slate-500 block">Papan Whiteboard</span>
                   <span className="text-sm font-bold text-slate-800">
-                    {currentRoom.specifications.hasWhiteboard ? 'Tersedia' : 'Tidak Ada'}
+                    {room.hasWhiteboard ? 'Tersedia' : 'Tidak Ada'}
                   </span>
                 </div>
               </div>
@@ -132,7 +141,7 @@ export const DetailPage: React.FC<DetailPageProps> = ({
             <div className="pt-4 border-t border-slate-100">
               <h2 className="text-sm font-bold text-slate-900 mb-3">Fasilitas yang Termasuk</h2>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {currentRoom.facilities.map((fac, idx) => (
+                {room.facilities.map((fac, idx) => (
                   <li key={idx} className="flex items-center gap-2 text-sm text-slate-700">
                     <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -153,10 +162,35 @@ export const DetailPage: React.FC<DetailPageProps> = ({
               <span>Tata Tertib & Kebijakan Gedung WorkNet</span>
             </h2>
             <ul className="list-disc list-inside space-y-1.5 text-sm text-slate-600 leading-relaxed">
-              {currentRoom.rules.map((rule, idx) => (
+              {room.rules.map((rule, idx) => (
                 <li key={idx}>{rule}</li>
               ))}
             </ul>
+          </div>
+
+          {/* Relasi Database: Daftar Reservasi Terkini untuk Ruangan Ini */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">
+                Jadwal Reservasi Terkonfirmasi ({room.bookings.length})
+              </h2>
+              <span className="text-xs text-slate-500">Relasi Database PostgreSQL (1 Room → N Bookings)</span>
+            </div>
+            {room.bookings.length > 0 ? (
+              <div className="space-y-2">
+                {room.bookings.map((b) => (
+                  <div key={b.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-semibold text-slate-800">{b.date}</span>
+                      <span className="text-slate-500 ml-2">({b.startTime} - {b.endTime})</span>
+                    </div>
+                    <span className="text-slate-600">Oleh: <strong>{b.fullName}</strong></span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Belum ada reservasi aktif pada ruangan ini. Anda dapat memesan jadwal pertama!</p>
+            )}
           </div>
         </div>
 
@@ -169,7 +203,7 @@ export const DetailPage: React.FC<DetailPageProps> = ({
               </span>
               <div className="flex items-baseline gap-1 mt-1">
                 <span className="text-3xl font-extrabold text-blue-600">
-                  Rp {currentRoom.pricePerHour.toLocaleString('id-ID')}
+                  Rp {room.pricePerHour.toLocaleString('id-ID')}
                 </span>
                 <span className="text-sm text-slate-500 font-medium">/ jam</span>
               </div>
@@ -182,7 +216,7 @@ export const DetailPage: React.FC<DetailPageProps> = ({
               </div>
               <div className="flex justify-between">
                 <span>Kapasitas Rekomendasi</span>
-                <span className="font-semibold text-slate-800">1 - {currentRoom.capacity} Orang</span>
+                <span className="font-semibold text-slate-800">1 - {room.capacity} Orang</span>
               </div>
               <div className="flex justify-between">
                 <span>Free Mineral Water</span>
@@ -196,25 +230,30 @@ export const DetailPage: React.FC<DetailPageProps> = ({
 
             {/* Tombol Aksi */}
             <div className="space-y-2">
-              <Button
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={!currentRoom.available}
-                onClick={() => onNavigateToBooking(currentRoom.id)}
-                aria-label={currentRoom.available ? `Lanjutkan pemesanan ruangan ${currentRoom.name}` : `Ruangan ${currentRoom.name} sedang tidak tersedia`}
-              >
-                {currentRoom.available ? 'Pesan Ruangan Ini' : 'Ruangan Sedang Penuh'}
-              </Button>
+              {room.available ? (
+                <Link
+                  href={`/booking?roomId=${room.id}`}
+                  className="w-full inline-flex items-center justify-center font-medium rounded-lg transition-colors bg-blue-600 hover:bg-blue-700 text-white text-base px-5 py-2.5 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  Pesan Ruangan Ini
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full inline-flex items-center justify-center font-medium rounded-lg bg-slate-200 text-slate-500 text-base px-5 py-2.5 cursor-not-allowed"
+                >
+                  Ruangan Sedang Penuh
+                </button>
+              )}
 
-              {!currentRoom.available && (
+              {!room.available && (
                 <p className="text-xs text-rose-600 text-center font-medium">
                   Ruangan ini sedang dalam masa sewa aktif. Silakan pilih ruangan lain di katalog.
                 </p>
               )}
             </div>
 
-            {/* Jaminan Layanan */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
               <p className="font-semibold text-slate-700">Garansi Layanan WorkNet:</p>
               <p>• Jaringan internet cadangan (Failover link otomatis).</p>
@@ -225,4 +264,4 @@ export const DetailPage: React.FC<DetailPageProps> = ({
       </div>
     </div>
   );
-};
+}

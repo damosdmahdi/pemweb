@@ -1,21 +1,19 @@
-import React, { useState, useMemo } from 'react';
-import type { Room, BookingFormData, BookingFormErrors, BookingConfirmation } from '../types';
-import { FormField } from '../components/FormField';
-import { Button } from '../components/Button';
-import { Modal } from '../components/Modal';
+'use client';
 
-export interface BookingPageProps {
+import React, { useState, useMemo, useTransition } from 'react';
+import Link from 'next/link';
+import type { Room, Booking } from '@prisma/client';
+import { FormField } from '../../components/FormField';
+import { Button } from '../../components/Button';
+import { Modal } from '../../components/Modal';
+import { createBookingAction, type ActionResponse } from '../../actions/bookingActions';
+
+export interface BookingFormViewProps {
   rooms: Room[];
   initialRoomId?: string;
-  onNavigateToCatalog: () => void;
 }
 
-export const BookingPage: React.FC<BookingPageProps> = ({
-  rooms,
-  initialRoomId,
-  onNavigateToCatalog,
-}) => {
-  // Ambil tanggal hari ini dalam format YYYY-MM-DD sebagai batas minimal tanggal
+export const BookingFormView: React.FC<BookingFormViewProps> = ({ rooms, initialRoomId }) => {
   const todayStr = useMemo(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -26,7 +24,7 @@ export const BookingPage: React.FC<BookingPageProps> = ({
 
   const defaultRoomId = initialRoomId || (rooms.length > 0 ? rooms[0].id : '');
 
-  const [formData, setFormData] = useState<BookingFormData>({
+  const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
@@ -40,17 +38,17 @@ export const BookingPage: React.FC<BookingPageProps> = ({
     agreeToTerms: false,
   });
 
-  const [errors, setErrors] = useState<BookingFormErrors>({});
-  const [touched, setTouched] = useState<Partial<Record<keyof BookingFormData, boolean>>>({});
-  const [confirmedBooking, setConfirmedBooking] = useState<BookingConfirmation | null>(null);
+  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  // Cari objek ruangan terpilih
   const selectedRoom = useMemo(() => {
     return rooms.find((r) => r.id === formData.roomId) || rooms[0];
   }, [rooms, formData.roomId]);
 
-  // Hitung durasi dan estimasi biaya sewa
   const { durationHours, totalCost } = useMemo(() => {
     if (!formData.startTime || !formData.endTime || !selectedRoom) {
       return { durationHours: 0, totalCost: 0 };
@@ -73,154 +71,120 @@ export const BookingPage: React.FC<BookingPageProps> = ({
     return { durationHours: roundedHours, totalCost: cost };
   }, [formData.startTime, formData.endTime, selectedRoom]);
 
-  // Fungsi validasi seluruh kolom formulir
-  const validate = (data: BookingFormData): BookingFormErrors => {
-    const newErrors: BookingFormErrors = {};
+  const validateClient = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
 
-    // 1. Validasi Nama Lengkap
-    if (!data.fullName.trim()) {
-      newErrors.fullName = 'Nama lengkap wajib diisi.';
-    } else if (data.fullName.trim().length < 3) {
-      newErrors.fullName = 'Nama lengkap minimal terdiri dari 3 karakter.';
+    if (!formData.fullName.trim()) {
+      errors.fullName = 'Nama lengkap wajib diisi.';
+    } else if (formData.fullName.trim().length < 3) {
+      errors.fullName = 'Nama lengkap minimal 3 karakter.';
     }
 
-    // 2. Validasi Format Email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!data.email.trim()) {
-      newErrors.email = 'Alamat email wajib diisi.';
-    } else if (!emailRegex.test(data.email.trim())) {
-      newErrors.email = 'Format email tidak valid (contoh: nama@domain.com).';
+    if (!formData.email.trim()) {
+      errors.email = 'Alamat email wajib diisi.';
+    } else if (!emailRegex.test(formData.email.trim())) {
+      errors.email = 'Format email tidak valid (contoh: nama@domain.com).';
     }
 
-    // 3. Validasi Nomor Telepon / WhatsApp
-    const phoneDigits = data.phone.replace(/[^0-9]/g, '');
-    if (!data.phone.trim()) {
-      newErrors.phone = 'Nomor WhatsApp / telepon wajib diisi.';
+    const phoneDigits = formData.phone.replace(/[^0-9]/g, '');
+    if (!formData.phone.trim()) {
+      errors.phone = 'Nomor WhatsApp / telepon wajib diisi.';
     } else if (phoneDigits.length < 10 || phoneDigits.length > 14) {
-      newErrors.phone = 'Nomor telepon harus antara 10 sampai 14 digit angka.';
+      errors.phone = 'Nomor telepon harus 10 sampai 14 digit angka.';
     }
 
-    // 4. Validasi Kategori Peminjam
-    if (!data.userCategory) {
-      newErrors.userCategory = 'Silakan pilih kategori peminjam Anda.';
+    if (!formData.userCategory) {
+      errors.userCategory = 'Silakan pilih kategori peminjam Anda.';
     }
 
-    // 5. Validasi Pilihan Ruangan
-    if (!data.roomId) {
-      newErrors.roomId = 'Ruangan wajib dipilih.';
+    if (!formData.roomId) {
+      errors.roomId = 'Ruangan wajib dipilih.';
     } else if (selectedRoom && !selectedRoom.available) {
-      newErrors.roomId = 'Ruangan ini sedang penuh dan tidak dapat dipesan.';
+      errors.roomId = 'Ruangan ini sedang penuh dan tidak dapat dipesan.';
     }
 
-    // 6. Validasi Tanggal
-    if (!data.date) {
-      newErrors.date = 'Tanggal pemesanan wajib diisi.';
-    } else if (data.date < todayStr) {
-      newErrors.date = 'Tanggal pemesanan tidak boleh merupakan tanggal lampau.';
+    if (!formData.date) {
+      errors.date = 'Tanggal pemesanan wajib diisi.';
+    } else if (formData.date < todayStr) {
+      errors.date = 'Tanggal pemesanan tidak boleh merupakan tanggal lampau.';
     }
 
-    // 7. Validasi Jam Mulai dan Jam Selesai
-    if (!data.startTime) {
-      newErrors.startTime = 'Jam mulai wajib diisi.';
+    if (!formData.startTime) {
+      errors.startTime = 'Jam mulai wajib diisi.';
     }
-    if (!data.endTime) {
-      newErrors.endTime = 'Jam selesai wajib diisi.';
-    } else if (data.startTime && data.endTime) {
-      const [startH, startM] = data.startTime.split(':').map(Number);
-      const [endH, endM] = data.endTime.split(':').map(Number);
+    if (!formData.endTime) {
+      errors.endTime = 'Jam selesai wajib diisi.';
+    } else if (formData.startTime && formData.endTime) {
+      const [startH, startM] = formData.startTime.split(':').map(Number);
+      const [endH, endM] = formData.endTime.split(':').map(Number);
       const startMin = startH * 60 + startM;
       const endMin = endH * 60 + endM;
 
       if (endMin <= startMin) {
-        newErrors.endTime = 'Jam selesai harus lebih akhir dari jam mulai.';
+        errors.endTime = 'Jam selesai harus lebih akhir dari jam mulai.';
       } else if (endMin - startMin < 60) {
-        newErrors.endTime = 'Durasi pemesanan minimal adalah 1 jam (60 menit).';
+        errors.endTime = 'Durasi pemesanan minimal adalah 1 jam (60 menit).';
       }
     }
 
-    // 8. Validasi Jumlah Peserta (Kapasitas)
-    const attendeesNum = Number(data.attendees);
-    if (!data.attendees || isNaN(attendeesNum) || attendeesNum <= 0) {
-      newErrors.attendees = 'Jumlah peserta harus minimal 1 orang.';
+    const attendeesNum = Number(formData.attendees);
+    if (!formData.attendees || isNaN(attendeesNum) || attendeesNum <= 0) {
+      errors.attendees = 'Jumlah peserta harus minimal 1 orang.';
     } else if (selectedRoom && attendeesNum > selectedRoom.capacity) {
-      newErrors.attendees = `Jumlah peserta (${attendeesNum}) melebihi kapasitas ${selectedRoom.name} (maks. ${selectedRoom.capacity} orang).`;
+      errors.attendees = `Jumlah peserta (${attendeesNum}) melebihi kapasitas ${selectedRoom.name} (maks. ${selectedRoom.capacity} orang).`;
     }
 
-    // 9. Validasi Persetujuan Syarat & Ketentuan
-    if (!data.agreeToTerms) {
-      newErrors.agreeToTerms = 'Anda wajib menyetujui tata tertib dan ketentuan gedung WorkNet.';
+    if (!formData.agreeToTerms) {
+      errors.agreeToTerms = 'Anda wajib menyetujui tata tertib dan ketentuan gedung WorkNet.';
     }
 
-    return newErrors;
+    return errors;
   };
 
-  const handleBlur = (field: keyof BookingFormData) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-    const validationErrors = validate(formData);
-    setErrors((prev) => ({
-      ...prev,
-      [field]: validationErrors[field],
-    }));
-  };
-
-  const handleChange = (
-    field: keyof BookingFormData,
-    value: string | boolean
-  ) => {
-    const updated = { ...formData, [field]: value };
-    setFormData(updated);
-
-    // Jika input sudah pernah disentuh, perbarui validasi secara langsung
-    if (touched[field]) {
-      const validationErrors = validate(updated);
-      setErrors((prev) => ({
-        ...prev,
-        [field]: validationErrors[field],
-      }));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setServerErrors({});
+    setServerMessage(null);
 
-    // Tandai semua input sebagai disentuh
-    const allTouched: Partial<Record<keyof BookingFormData, boolean>> = {};
-    (Object.keys(formData) as (keyof BookingFormData)[]).forEach((key) => {
-      allTouched[key] = true;
-    });
-    setTouched(allTouched);
+    const validationErrors = validateClient();
+    setClientErrors(validationErrors);
 
-    const validationErrors = validate(formData);
-    setErrors(validationErrors);
-
-    if (Object.keys(validationErrors).length === 0) {
-      // Buat tiket konfirmasi reservasi
-      const confirmation: BookingConfirmation = {
-        bookingId: `WN-${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`,
-        roomName: selectedRoom.name,
-        fullName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        userCategory: formData.userCategory,
-        date: formData.date,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        durationHours: durationHours,
-        attendees: Number(formData.attendees),
-        totalCost: totalCost,
-        createdAt: new Date().toLocaleString('id-ID'),
-      };
-
-      setConfirmedBooking(confirmation);
-      setIsSuccessModalOpen(true);
-    } else {
-      // Fokus ke elemen error pertama untuk kenyamanan aksesibilitas
+    if (Object.keys(validationErrors).length > 0) {
       const firstErrorField = Object.keys(validationErrors)[0];
       const element = document.getElementById(firstErrorField);
-      if (element) {
-        element.focus();
-      }
+      if (element) element.focus();
+      return;
     }
+
+    // Buat FormData untuk dikirim ke Next.js Server Action
+    const dataToSend = new FormData();
+    dataToSend.append('fullName', formData.fullName);
+    dataToSend.append('email', formData.email);
+    dataToSend.append('phone', formData.phone);
+    dataToSend.append('userCategory', formData.userCategory);
+    dataToSend.append('roomId', formData.roomId);
+    dataToSend.append('date', formData.date);
+    dataToSend.append('startTime', formData.startTime);
+    dataToSend.append('endTime', formData.endTime);
+    dataToSend.append('attendees', formData.attendees);
+    dataToSend.append('notes', formData.notes);
+    dataToSend.append('agreeToTerms', String(formData.agreeToTerms));
+
+    startTransition(async () => {
+      const res: ActionResponse = await createBookingAction(null, dataToSend);
+      if (res.success && res.data) {
+        setConfirmedBooking(res.data as Booking);
+        setIsSuccessModalOpen(true);
+      } else {
+        if (res.errors) {
+          setServerErrors(res.errors);
+        }
+        if (res.message) {
+          setServerMessage(res.message);
+        }
+      }
+    });
   };
 
   const handleResetForm = () => {
@@ -237,22 +201,35 @@ export const BookingPage: React.FC<BookingPageProps> = ({
       notes: '',
       agreeToTerms: false,
     });
-    setTouched({});
-    setErrors({});
+    setClientErrors({});
+    setServerErrors({});
+    setServerMessage(null);
     setIsSuccessModalOpen(false);
   };
+
+  // Menggabungkan pesan error dari klien dan server
+  const getFieldError = (field: string) => serverErrors[field] || clientErrors[field];
 
   return (
     <div className="space-y-6">
       {/* Header Halaman */}
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Formulir Reservasi Ruangan
+          Formulir Reservasi Ruangan (Persisten ke PostgreSQL)
         </h1>
         <p className="text-sm text-slate-600 mt-1">
-          Lengkapi data di bawah ini untuk memesan ruangan kerja di gedung WorkNet. Seluruh masukan diverifikasi secara instan sebelum pemesanan diproses.
+          Lengkapi data di bawah ini untuk memesan ruangan kerja di gedung WorkNet. Masukan divalidasi ganda: di sisi klien dan di sisi server via Zod Schema.
         </p>
       </div>
+
+      {serverMessage && !isSuccessModalOpen && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-sm flex items-center gap-2">
+          <svg className="w-5 h-5 text-rose-500 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>{serverMessage}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Kolom Kiri: Formulir Pemesanan */}
@@ -274,24 +251,19 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 id="fullName"
                 label="Nama Lengkap"
                 required
-                error={touched.fullName ? errors.fullName : undefined}
-                helperText="Masukkan nama lengkap sesuai kartu identitas (KTP/KTM)."
+                error={getFieldError('fullName')}
+                helperText="Masukkan nama lengkap pemesan."
               >
                 <input
                   id="fullName"
                   name="fullName"
                   type="text"
                   autoComplete="name"
-                  placeholder="Contoh: Budi Santoso"
+                  placeholder="Contoh: Damos Kurniawan"
                   value={formData.fullName}
-                  onChange={(e) => handleChange('fullName', e.target.value)}
-                  onBlur={() => handleBlur('fullName')}
-                  aria-invalid={!!(touched.fullName && errors.fullName)}
-                  aria-describedby={
-                    touched.fullName && errors.fullName ? 'fullName-error' : 'fullName-desc'
-                  }
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                    touched.fullName && errors.fullName
+                    getFieldError('fullName')
                       ? 'border-rose-400 focus:ring-rose-500'
                       : 'border-slate-300 focus:ring-blue-600'
                   }`}
@@ -300,13 +272,12 @@ export const BookingPage: React.FC<BookingPageProps> = ({
 
               {/* Baris Email & No Telepon */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Email */}
                 <FormField
                   id="email"
                   label="Alamat Email"
                   required
-                  error={touched.email ? errors.email : undefined}
-                  helperText="Bukti reservasi & tiket akses akan dikirimkan ke email ini."
+                  error={getFieldError('email')}
+                  helperText="Bukti reservasi akan dikirimkan ke email ini."
                 >
                   <input
                     id="email"
@@ -315,27 +286,21 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                     autoComplete="email"
                     placeholder="nama@email.com"
                     value={formData.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    onBlur={() => handleBlur('email')}
-                    aria-invalid={!!(touched.email && errors.email)}
-                    aria-describedby={
-                      touched.email && errors.email ? 'email-error' : 'email-desc'
-                    }
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                      touched.email && errors.email
+                      getFieldError('email')
                         ? 'border-rose-400 focus:ring-rose-500'
                         : 'border-slate-300 focus:ring-blue-600'
                     }`}
                   />
                 </FormField>
 
-                {/* Nomor Telepon / WA */}
                 <FormField
                   id="phone"
                   label="Nomor WhatsApp / Telepon"
                   required
-                  error={touched.phone ? errors.phone : undefined}
-                  helperText="Format 10-14 digit angka aktif."
+                  error={getFieldError('phone')}
+                  helperText="Format 10-14 digit angka."
                 >
                   <input
                     id="phone"
@@ -344,14 +309,9 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                     autoComplete="tel"
                     placeholder="081234567890"
                     value={formData.phone}
-                    onChange={(e) => handleChange('phone', e.target.value)}
-                    onBlur={() => handleBlur('phone')}
-                    aria-invalid={!!(touched.phone && errors.phone)}
-                    aria-describedby={
-                      touched.phone && errors.phone ? 'phone-error' : 'phone-desc'
-                    }
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                      touched.phone && errors.phone
+                      getFieldError('phone')
                         ? 'border-rose-400 focus:ring-rose-500'
                         : 'border-slate-300 focus:ring-blue-600'
                     }`}
@@ -364,23 +324,16 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 id="userCategory"
                 label="Kategori Pengguna"
                 required
-                error={touched.userCategory ? errors.userCategory : undefined}
-                helperText="Pilih profil pengguna yang paling sesuai."
+                error={getFieldError('userCategory')}
+                helperText="Pilih kategori profil pengguna Anda."
               >
                 <select
                   id="userCategory"
                   name="userCategory"
                   value={formData.userCategory}
-                  onChange={(e) => handleChange('userCategory', e.target.value)}
-                  onBlur={() => handleBlur('userCategory')}
-                  aria-invalid={!!(touched.userCategory && errors.userCategory)}
-                  aria-describedby={
-                    touched.userCategory && errors.userCategory
-                      ? 'userCategory-error'
-                      : 'userCategory-desc'
-                  }
+                  onChange={(e) => setFormData({ ...formData, userCategory: e.target.value })}
                   className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                    touched.userCategory && errors.userCategory
+                    getFieldError('userCategory')
                       ? 'border-rose-400 focus:ring-rose-500'
                       : 'border-slate-300 focus:ring-blue-600'
                   }`}
@@ -400,26 +353,20 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 2. Detail Reservasi Ruangan
               </legend>
 
-              {/* Pilihan Ruangan */}
               <FormField
                 id="roomId"
                 label="Pilihan Ruangan di Gedung WorkNet"
                 required
-                error={touched.roomId ? errors.roomId : undefined}
-                helperText="Pilih ruangan kerja sesuai kebutuhan kapasitas dan aktivitas Anda."
+                error={getFieldError('roomId')}
+                helperText="Data diambil langsung dari PostgreSQL via Prisma ORM."
               >
                 <select
                   id="roomId"
                   name="roomId"
                   value={formData.roomId}
-                  onChange={(e) => handleChange('roomId', e.target.value)}
-                  onBlur={() => handleBlur('roomId')}
-                  aria-invalid={!!(touched.roomId && errors.roomId)}
-                  aria-describedby={
-                    touched.roomId && errors.roomId ? 'roomId-error' : 'roomId-desc'
-                  }
+                  onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
                   className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                    touched.roomId && errors.roomId
+                    getFieldError('roomId')
                       ? 'border-rose-400 focus:ring-rose-500'
                       : 'border-slate-300 focus:ring-blue-600'
                   }`}
@@ -436,12 +383,11 @@ export const BookingPage: React.FC<BookingPageProps> = ({
 
               {/* Tanggal & Waktu */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Tanggal */}
                 <FormField
                   id="date"
                   label="Tanggal Pemesanan"
                   required
-                  error={touched.date ? errors.date : undefined}
+                  error={getFieldError('date')}
                   helperText="Minimal hari ini."
                 >
                   <input
@@ -450,24 +396,20 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                     type="date"
                     min={todayStr}
                     value={formData.date}
-                    onChange={(e) => handleChange('date', e.target.value)}
-                    onBlur={() => handleBlur('date')}
-                    aria-invalid={!!(touched.date && errors.date)}
-                    aria-describedby={touched.date && errors.date ? 'date-error' : 'date-desc'}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                      touched.date && errors.date
+                      getFieldError('date')
                         ? 'border-rose-400 focus:ring-rose-500'
                         : 'border-slate-300 focus:ring-blue-600'
                     }`}
                   />
                 </FormField>
 
-                {/* Jam Mulai */}
                 <FormField
                   id="startTime"
                   label="Jam Mulai"
                   required
-                  error={touched.startTime ? errors.startTime : undefined}
+                  error={getFieldError('startTime')}
                   helperText="Format 24 jam."
                 >
                   <input
@@ -475,26 +417,20 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                     name="startTime"
                     type="time"
                     value={formData.startTime}
-                    onChange={(e) => handleChange('startTime', e.target.value)}
-                    onBlur={() => handleBlur('startTime')}
-                    aria-invalid={!!(touched.startTime && errors.startTime)}
-                    aria-describedby={
-                      touched.startTime && errors.startTime ? 'startTime-error' : 'startTime-desc'
-                    }
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                     className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                      touched.startTime && errors.startTime
+                      getFieldError('startTime')
                         ? 'border-rose-400 focus:ring-rose-500'
                         : 'border-slate-300 focus:ring-blue-600'
                     }`}
                   />
                 </FormField>
 
-                {/* Jam Selesai */}
                 <FormField
                   id="endTime"
                   label="Jam Selesai"
                   required
-                  error={touched.endTime ? errors.endTime : undefined}
+                  error={getFieldError('endTime')}
                   helperText="Min. 1 jam durasi."
                 >
                   <input
@@ -502,14 +438,9 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                     name="endTime"
                     type="time"
                     value={formData.endTime}
-                    onChange={(e) => handleChange('endTime', e.target.value)}
-                    onBlur={() => handleBlur('endTime')}
-                    aria-invalid={!!(touched.endTime && errors.endTime)}
-                    aria-describedby={
-                      touched.endTime && errors.endTime ? 'endTime-error' : 'endTime-desc'
-                    }
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                     className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                      touched.endTime && errors.endTime
+                      getFieldError('endTime')
                         ? 'border-rose-400 focus:ring-rose-500'
                         : 'border-slate-300 focus:ring-blue-600'
                     }`}
@@ -522,36 +453,31 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 id="attendees"
                 label="Jumlah Peserta / Hadirin"
                 required
-                error={touched.attendees ? errors.attendees : undefined}
-                helperText={`Kapasitas ruangan ini maksimal ${selectedRoom.capacity} orang.`}
+                error={getFieldError('attendees')}
+                helperText={`Kapasitas maksimal ruangan ini adalah ${selectedRoom ? selectedRoom.capacity : 0} orang.`}
               >
                 <input
                   id="attendees"
                   name="attendees"
                   type="number"
                   min="1"
-                  max={selectedRoom.capacity}
-                  placeholder={`1 - ${selectedRoom.capacity}`}
+                  max={selectedRoom ? selectedRoom.capacity : 50}
+                  placeholder="Jumlah orang"
                   value={formData.attendees}
-                  onChange={(e) => handleChange('attendees', e.target.value)}
-                  onBlur={() => handleBlur('attendees')}
-                  aria-invalid={!!(touched.attendees && errors.attendees)}
-                  aria-describedby={
-                    touched.attendees && errors.attendees ? 'attendees-error' : 'attendees-desc'
-                  }
+                  onChange={(e) => setFormData({ ...formData, attendees: e.target.value })}
                   className={`w-full px-3.5 py-2.5 text-sm bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-2 text-slate-900 ${
-                    touched.attendees && errors.attendees
+                    getFieldError('attendees')
                       ? 'border-rose-400 focus:ring-rose-500'
                       : 'border-slate-300 focus:ring-blue-600'
                   }`}
                 />
               </FormField>
 
-              {/* Catatan Tambahan (Opsional) */}
+              {/* Catatan Kebutuhan Khusus */}
               <FormField
                 id="notes"
-                label="Catatan Tambahan atau Kebutuhan Khusus (Opsional)"
-                helperText="Contoh: Permintaan kabel proyektor ekstra, seting tata letak meja, atau info tamu luar."
+                label="Catatan Tambahan (Opsional)"
+                helperText="Contoh: Permintaan tata letak meja khusus atau penambahan proyektor."
               >
                 <textarea
                   id="notes"
@@ -559,7 +485,7 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                   rows={3}
                   placeholder="Tuliskan catatan kebutuhan di sini..."
                   value={formData.notes}
-                  onChange={(e) => handleChange('notes', e.target.value)}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
                 />
               </FormField>
@@ -573,12 +499,7 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                   name="agreeToTerms"
                   type="checkbox"
                   checked={formData.agreeToTerms}
-                  onChange={(e) => handleChange('agreeToTerms', e.target.checked)}
-                  onBlur={() => handleBlur('agreeToTerms')}
-                  aria-invalid={!!(touched.agreeToTerms && errors.agreeToTerms)}
-                  aria-describedby={
-                    touched.agreeToTerms && errors.agreeToTerms ? 'agreeToTerms-error' : undefined
-                  }
+                  onChange={(e) => setFormData({ ...formData, agreeToTerms: e.target.checked })}
                   className="mt-1 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                 />
                 <span className="text-xs sm:text-sm text-slate-700 leading-relaxed">
@@ -587,52 +508,52 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 </span>
               </label>
 
-              {touched.agreeToTerms && errors.agreeToTerms && (
+              {getFieldError('agreeToTerms') && (
                 <p id="agreeToTerms-error" role="alert" className="text-xs font-medium text-rose-600 flex items-center gap-1 mt-1.5 pl-7">
                   <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  <span>{errors.agreeToTerms}</span>
+                  <span>{getFieldError('agreeToTerms')}</span>
                 </p>
               )}
             </div>
 
             {/* Tombol Aksi Submit */}
             <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-3">
-              <Button type="button" variant="outline" onClick={handleResetForm}>
+              <Button type="button" variant="outline" onClick={handleResetForm} disabled={isPending}>
                 Atur Ulang Form
               </Button>
-              <Button type="submit" variant="primary">
-                Kirim Reservasi Ruangan
+              <Button type="submit" variant="primary" disabled={isPending}>
+                {isPending ? 'Menyimpan ke Server...' : 'Kirim Reservasi Ruangan'}
               </Button>
             </div>
           </form>
         </div>
 
-        {/* Kolom Kanan: Rincian Estimasi Biaya & Info Ruangan */}
+        {/* Kolom Kanan: Rincian Estimasi Biaya */}
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-24 space-y-5">
             <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
               Ringkasan Estimasi Biaya
             </h2>
 
-            {/* Info Ruangan yang Sedang Dipilih */}
-            <div className="flex gap-3 items-center">
-              <img
-                src={selectedRoom.imageUrl}
-                alt={selectedRoom.name}
-                className="w-16 h-16 rounded-lg object-cover shrink-0"
-              />
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-slate-900 truncate">{selectedRoom.name}</h3>
-                <p className="text-xs text-slate-500">Lantai {selectedRoom.floor} • {selectedRoom.categoryLabel}</p>
-                <p className="text-xs font-semibold text-blue-600">
-                  Rp {selectedRoom.pricePerHour.toLocaleString('id-ID')} / jam
-                </p>
+            {selectedRoom && (
+              <div className="flex gap-3 items-center">
+                <img
+                  src={selectedRoom.imageUrl}
+                  alt={selectedRoom.name}
+                  className="w-16 h-16 rounded-lg object-cover shrink-0"
+                />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 truncate">{selectedRoom.name}</h3>
+                  <p className="text-xs text-slate-500">Lantai {selectedRoom.floor} • {selectedRoom.categoryLabel}</p>
+                  <p className="text-xs font-semibold text-blue-600">
+                    Rp {selectedRoom.pricePerHour.toLocaleString('id-ID')} / jam
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Rincian Perhitungan */}
             <div className="space-y-2.5 text-xs text-slate-600 border-t border-b border-slate-100 py-3">
               <div className="flex justify-between">
                 <span>Tanggal Sewa:</span>
@@ -656,7 +577,6 @@ export const BookingPage: React.FC<BookingPageProps> = ({
               </div>
             </div>
 
-            {/* Total Pembayaran */}
             <div className="flex items-baseline justify-between pt-1">
               <span className="text-sm font-bold text-slate-800">Total Estimasi:</span>
               <span className="text-xl font-extrabold text-blue-600">
@@ -665,9 +585,9 @@ export const BookingPage: React.FC<BookingPageProps> = ({
             </div>
 
             <div className="bg-blue-50 text-blue-900 p-3 rounded-xl text-xs space-y-1">
-              <p className="font-semibold">Informasi Validasi:</p>
-              <p>• Tarif dihitung otomatis per jam penuh.</p>
-              <p>• Pembayaran dan verifikasi kartu akses dilakukan di resepsionis Lantai 1.</p>
+              <p className="font-semibold">Integrasi Database PostgreSQL:</p>
+              <p>• Data otomatis tersimpan persisten melalui Prisma ORM.</p>
+              <p>• Periksa riwayat reservasi Anda di menu &quot;Data Reservasi&quot;.</p>
             </div>
           </div>
         </div>
@@ -678,10 +598,9 @@ export const BookingPage: React.FC<BookingPageProps> = ({
         <Modal
           isOpen={isSuccessModalOpen}
           onClose={() => setIsSuccessModalOpen(false)}
-          title="Reservasi Berhasil Dikonfirmasi!"
+          title="Reservasi Berhasil Tersimpan di Database!"
         >
           <div className="space-y-5">
-            {/* Banner Sukses */}
             <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-xl flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -689,22 +608,17 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-bold">Pemesanan Anda Telah Dicatat</h3>
+                <h3 className="text-sm font-bold">Pemesanan Tersimpan Persisten (PostgreSQL)</h3>
                 <p className="text-xs text-emerald-800 mt-0.5">
-                  ID Reservasi: <strong className="font-mono text-emerald-950">{confirmedBooking.bookingId}</strong>
+                  Kode Booking: <strong className="font-mono text-emerald-950 font-bold">{confirmedBooking.bookingCode}</strong>
                 </p>
               </div>
             </div>
 
-            {/* Detail Tiket Pemesanan */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-200/60">
                 <span className="text-slate-500">Nama Pemesan:</span>
                 <span className="font-bold text-slate-800">{confirmedBooking.fullName}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200/60">
-                <span className="text-slate-500">Ruangan:</span>
-                <span className="font-bold text-slate-800">{confirmedBooking.roomName}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200/60">
                 <span className="text-slate-500">Jadwal:</span>
@@ -713,7 +627,7 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200/60">
-                <span className="text-slate-500">Durasi:</span>
+                <span className="text-slate-500">Durasi Sewa:</span>
                 <span className="font-bold text-slate-800">{confirmedBooking.durationHours} Jam</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200/60">
@@ -721,28 +635,20 @@ export const BookingPage: React.FC<BookingPageProps> = ({
                 <span className="font-bold text-slate-800">{confirmedBooking.attendees} Orang</span>
               </div>
               <div className="flex justify-between py-1 pt-2 text-sm">
-                <span className="font-bold text-slate-800">Total Tarif:</span>
+                <span className="font-bold text-slate-800">Total Biaya:</span>
                 <span className="font-extrabold text-blue-600">
                   Rp {confirmedBooking.totalCost.toLocaleString('id-ID')}
                 </span>
               </div>
             </div>
 
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Tunjukkan bukti ID reservasi ini ke resepsionis gedung WorkNet pada hari pemakaian untuk mengaktifkan kartu akses pintar ruangan Anda.
-            </p>
-
             <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsSuccessModalOpen(false);
-                  onNavigateToCatalog();
-                }}
+              <Link
+                href="/manage/bookings"
+                className="inline-flex items-center justify-center font-medium rounded-lg transition-colors border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs px-3 py-2"
               >
-                Kembali ke Katalog
-              </Button>
+                Lihat di Panel Reservasi
+              </Link>
               <Button
                 variant="primary"
                 size="sm"

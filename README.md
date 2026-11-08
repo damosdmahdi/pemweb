@@ -1,185 +1,199 @@
 # WorkNet — Sistem Pemesanan Ruang Kerja Gedung (Workspace Rental)
 
-> **Tugas 1 — Milestone 1: Pengembangan Antarmuka Produk Web Responsif dan Aksesibel**  
+> **Tugas 2 — Milestone 2: Logika Server, Validasi Zod, dan Integrasi Database PostgreSQL via Prisma ORM**  
 > **Mata Kuliah:** Pengembangan Aplikasi Web  
-> **Sub-CPMK:** 2 (C3, P3) | **Versi Rilis:** `v0.1`
+> **Versi Rilis Saat Ini:** `v0.2` (Melanjutkan rilis `v0.1`)
 
 ---
 
-## 1. Konsep dan Deskripsi Produk
+## 1. Perkembangan Produk (Evolusi dari v0.1 ke v0.2)
 
-### 1.1 Nama Produk
-**WorkNet** (*Smart Workspace Building Rental System*)
+Pada **Milestone 1 (v0.1)**, WorkNet telah membangun antarmuka web responsif dan aksesibel berbasis React & Tailwind CSS dengan mock data. Pada **Milestone 2 (v0.2)**, WorkNet dikembangkan menjadi aplikasi *full-stack* berbasis **Next.js App Router**:
 
-### 1.2 Latar Belakang & Permasalahan yang Diselesaikan
-Pertumbuhan gaya kerja fleksibel (*hybrid/remote*) dan aktivitas kolaborasi akademik maupun profesional menciptakan kebutuhan tinggi akan ruang kerja yang tenang, representatif, dan dapat disewa secara fleksibel per jam atau harian. Pada sebuah gedung yang khusus disewakan per ruangannya, sistem reservasi manual (seperti lewat telepon atau chat WhatsApp resepsionis) kerap menimbulkan kendala:
-* Terjadinya bentrok jadwal sewa (*double-booking*).
-* Ketidakjelasan ketersediaan fasilitas penunjang (misal: kapasitas stopkontak, layar proyektor, kecepatan internet).
-* Proses konfirmasi dan pencatatan data penyewa yang tidak efisien dan lambat.
-
-**WorkNet** hadir sebagai antarmuka pemesanan ruang kerja terpadu untuk satu gedung rental. Melalui platform ini, calon penyewa dapat menelusuri katalog ruangan, membandingkan spesifikasi teknis, memeriksa tata tertib penggunaan gedung, serta melakukan reservasi dengan validasi data instan.
-
-### 1.3 Sasaran Pengguna
-1. **Freelancer & Remote Worker:** Membutuhkan *Focus Pod* privat yang tenang, kedap suara, dan memiliki koneksi internet andal untuk panggilan daring.
-2. **Mahasiswa & Civitas Akademika:** Membutuhkan *Meeting/Collab Room* untuk kerja kelompok, diskusi riset, bimbingan, atau persiapan sidang.
-3. **Komunitas Kreatif & Penggiat IT:** Memerlukan *Creative Studio* atau *Event Hall* serbaguna untuk workshop, seminar, dan meetup.
-4. **Pekerja Profesional & Tim Startup:** Memerlukan *Team Suite* harian atau *Executive Boardroom* untuk presentasi formal dengan klien/investor.
-
-### 1.4 Fitur Awal (Milestone 1)
-* **Katalog Ruangan Interaktif:** Pencarian berbasis teks, filter kategori ruangan (*Focus Pod, Meeting Room, Team Office, Event Hall*), filter minimal kapasitas orang, dan filter status ketersediaan.
-* **Detail Spesifikasi Ruangan:** Tampilan menyeluruh terkait dimensi ruangan, daya listrik/stopkontak, kecepatan koneksi WiFi dedicated, kelengkapan audio/visual, aturan gedung, serta rincian tarif per jam.
-* **Formulir Reservasi Cerdas:** Pengisian jadwal, profil peminjam, jumlah peserta, dan catatan kebutuhan khusus yang dilengkapi dengan kalkulator estimasi biaya sewa otomatis.
-* **Validasi Sisi Klien (*Client-Side Validation*):** Pengecekan instan terhadap keabsahan nama, format email, panjang digit nomor telepon, tanggal sewa (mencegah tanggal lampau), jam mulai & selesai (minimal durasi sewa 1 jam), serta validasi agar jumlah peserta tidak melebihi kapasitas ruangan terpilih.
-* **Tiket Konfirmasi Reservasi:** Modal dialog interaktif yang menampilkan rangkuman ID pemesanan unik dan rincian transaksi setelah formulir berhasil diverifikasi.
+| Aspek Pengembangan | Milestone 1 (`v0.1`) | Milestone 2 (`v0.2`) |
+| :--- | :--- | :--- |
+| **Arsitektur Aplikasi** | Single Page Application (Vite + React) | **Next.js 15 App Router** (Server & Client Components) |
+| **Penyimpanan Data** | Mock data statis (`mockRooms.ts`) | **Database Relasional PostgreSQL** (Persisten) |
+| **Pengelolaan Basis Data** | Belum terintegrasi database | **Prisma ORM** (Model `Room` & `Booking` berelasi One-to-Many, migration, dan seeding) |
+| **Logika Server** | Validasi sisi klien saja | **Next.js Server Actions** (`'use server'`) |
+| **Validasi Sisi Server** | Belum ada | **Zod Schema Validation** (Penolakan masukan tidak sah di server) |
+| **Operasi CRUD** | Read katalog & Form reservasi awal | **Full CRUD Lengkap** pada kedua entitas (`Room` dan `Booking`) |
+| **Kesiapan Keamanan & Kriptografi** | Konsep produk awal | Struktur data relasional siap integrasi RBAC dan Digital Access Pass (QR signature) |
 
 ---
 
-## 2. Arsitektur Teknologi & Dependensi
+## 2. Fitur Utama & Operasi CRUD (Milestone 2)
 
-* **Library Utama:** [React](https://react.dev/) (v19)
-* **Bahasa:** [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
-* **Build Tool:** [Vite](https://vite.dev/) (v8)
-* **Styling Framework:** [Tailwind CSS](https://tailwindcss.com/) (v4 via `@tailwindcss/vite`)
-* **Standar Aksesibilitas:** Web Content Accessibility Guidelines (WCAG) 2.1 Level AA
+### 2.1 CRUD Entitas Ruangan (`Room`)
+1. **Create:** Menambahkan data ruangan baru (nama, kategori, lantai, kapasitas, tarif per jam, fasilitas, spesifikasi, aturan) melalui form modal di `/manage/rooms`.
+2. **Read:** Menampilkan katalog seluruh ruangan pada halaman utama (`/`) dan rincian spesifikasi teknis lengkap pada `/rooms/[id]`.
+3. **Update:** Memperbarui tarif sewa, kapasitas, atau deskripsi ruangan secara langsung melalui modal edit.
+4. **Delete:** Menghapus ruangan dari gedung secara aman (*Cascade Delete* membersihkan reservasi terkait).
+5. **Toggle Availability:** Tombol sakelar cepat untuk mengubah status ketersediaan (*Tersedia / Penuh*).
+
+### 2.2 CRUD Entitas Reservasi (`Booking`)
+1. **Create:** Calon penyewa memesan ruangan via `/booking` dengan kalkulator estimasi biaya otomatis dan validasi Zod.
+2. **Read:** Membaca seluruh data reservasi beserta informasi relasi ruangannya di `/manage/bookings` dan di halaman detail ruangan.
+3. **Update (Reschedule):** Mengubah jadwal tanggal dan jam sewa, durasi, serta jumlah peserta.
+4. **Delete (Cancel):** Membatalkan dan menghapus data reservasi dari sistem database.
 
 ---
 
-## 3. Struktur Direktori Proyek
+## 3. Pemodelan Database (Prisma ORM & PostgreSQL)
+
+Database menggunakan dua entitas yang saling berelasi (*One-to-Many*):
+
+```mermaid
+erDiagram
+    Room ||--o{ Booking : "has many"
+    Room {
+        String id PK
+        String name
+        String category
+        String categoryLabel
+        Int floor
+        Int capacity
+        Int pricePerHour
+        String description
+        String[] facilities
+        Boolean available
+        String imageUrl
+        String area
+        String wifiSpeed
+        Int powerOutlets
+        Boolean hasProjector
+        Boolean hasWhiteboard
+        Boolean hasSoundSystem
+        Boolean hasCoffeeAccess
+        String[] rules
+        DateTime createdAt
+        DateTime updatedAt
+    }
+    Booking {
+        String id PK
+        String bookingCode UK
+        String fullName
+        String email
+        String phone
+        String userCategory
+        String date
+        String startTime
+        String endTime
+        Int durationHours
+        Int attendees
+        Int totalCost
+        String notes
+        String status
+        String roomId FK
+        DateTime createdAt
+        DateTime updatedAt
+    }
+```
+
+* **Relasi:** Setiap `Booking` merujuk ke satu `Room` melalui foreign key `roomId` (`fields: [roomId], references: [id], onDelete: Cascade`).
+* Berkas skema: [`prisma/schema.prisma`](prisma/schema.prisma)
+* Berkas migrasi SQL: [`prisma/migrations/20261108165035_init/migration.sql`](prisma/migrations/20261108165035_init/migration.sql)
+
+---
+
+## 4. Struktur Direktori Proyek (v0.2)
 
 ```text
 pemweb/
 ├── docs/
-│   └── screenshots/               # Bukti tangkapan layar responsivitas & formulir
-├── public/                        # Aset publik statis
+│   ├── PENGUJIAN_DAN_BUKTI.md     # Panduan bukti Milestone 1
+│   ├── TESTING_SCENARIOS.md       # Matriks 10 Skenario Pengujian & Bukti Validasi Server
+│   └── screenshots/               # Folder tangkapan layar CRUD & database
+├── prisma/
+│   ├── migrations/                # Riwayat migrasi database PostgreSQL
+│   │   └── 20261108165035_init/
+│   │       └── migration.sql
+│   ├── schema.prisma              # Skema Prisma ORM (Room & Booking)
+│   └── seed.ts                    # Script seeding data sintetis
 ├── src/
-│   ├── components/                # Komponen antarmuka yang dapat digunakan ulang (Reusable)
-│   │   ├── Badge.tsx              # Komponen penanda status & kategori
+│   ├── actions/                   # Next.js Server Actions
+│   │   ├── bookingActions.ts      # Server Actions CRUD Reservasi & Validasi Zod
+│   │   └── roomActions.ts         # Server Actions CRUD Ruangan & Validasi Zod
+│   ├── app/                       # Next.js App Router (Halaman & Routing)
+│   │   ├── booking/               # Halaman formulir pemesanan
+│   │   ├── manage/
+│   │   │   ├── bookings/          # Panel CRUD Manajemen Reservasi
+│   │   │   └── rooms/             # Panel CRUD Manajemen Ruangan
+│   │   ├── rooms/[id]/            # Halaman dinamis detail spesifikasi ruangan
+│   │   ├── CatalogView.tsx        # Komponen interaktif filter katalog
+│   │   ├── layout.tsx             # Root layout (Navbar, Footer, A11y skip-link)
+│   │   └── page.tsx               # Server Component beranda (Katalog)
+│   ├── components/                # Komponen antarmuka reusable
+│   │   ├── Badge.tsx              # Komponen badge status & kategori
 │   │   ├── Button.tsx             # Komponen tombol multi-varian & accessible focus
-│   │   ├── Footer.tsx             # Komponen footer semantik dengan informasi gedung
-│   │   ├── FormField.tsx          # Komponen wrapper input, label semantik, dan pesan error
-│   │   ├── Modal.tsx              # Komponen dialog modal pop-up (Trap focus, ESC close)
-│   │   ├── Navbar.tsx             # Komponen header semantik & navigasi responsif
-│   │   └── RoomCard.tsx           # Komponen kartu ruangan pada katalog
-│   ├── data/
-│   │   └── mockRooms.ts           # Mock data ruangan di gedung WorkNet
-│   ├── pages/                     # Tiga halaman utama aplikasi
-│   │   ├── BookingPage.tsx        # Halaman formulir reservasi & validasi klien
-│   │   ├── CatalogPage.tsx        # Halaman katalog & filter ruangan
-│   │   └── DetailPage.tsx         # Halaman spesifikasi detail ruangan & tata tertib
-│   ├── types/
-│   │   └── index.ts               # Definisi tipe data TypeScript
-│   ├── App.tsx                    # Komponen root, routing state, dan skip-link
-│   ├── index.css                  # Direktif Tailwind CSS & styling aksesibilitas
-│   └── main.tsx                   # Entry point aplikasi React
-├── index.html                     # Dokumen HTML semantik (lang="id")
-├── package.json                   # Dependensi & script proyek
-├── tsconfig.json                  # Konfigurasi TypeScript compiler
-└── vite.config.ts                 # Konfigurasi Vite & Tailwind plugin
+│   │   ├── Footer.tsx             # Komponen footer semantik
+│   │   ├── FormField.tsx          # Wrapper input & pesan error
+│   │   ├── Modal.tsx              # Dialog modal aksesibel
+│   │   ├── Navbar.tsx             # Header navigasi responsif
+│   │   └── RoomCard.tsx           # Kartu ruangan katalog
+│   ├── lib/
+│   │   ├── prisma.ts              # Singleton instance PrismaClient
+│   │   └── validations.ts         # Zod Validation Schemas
+│   └── index.css                  # Konfigurasi Tailwind CSS v4 & styling aksesibilitas
+├── .env.example                   # Contoh konfigurasi environment tanpa kredensial
+├── docker-compose.yml             # Konfigurasi container PostgreSQL lokal (Port 5434)
+├── next.config.mjs                # Konfigurasi Next.js
+├── package.json                   # Dependensi & skrip proyek
+└── tsconfig.json                  # Konfigurasi TypeScript compiler
 ```
 
 ---
 
-## 4. Komponen Reusable yang Dikembangkan
+## 5. Petunjuk Menjalankan Proyek Secara Lokal
 
-Aplikasi ini mengimplementasikan komponen modular yang dapat digunakan berulang kali:
+Pastikan komputer Anda telah terpasang **Node.js (v18+)** dan **Docker**.
 
-1. **`Button` (`src/components/Button.tsx`):**
-   * Mendukung varian tampilan: `primary`, `secondary`, `outline`, dan `danger`.
-   * Mendukung berbagai ukuran (`sm`, `md`, `lg`) serta mode `fullWidth`.
-   * Dilengkapi indikator fokus keyboard yang jelas (`focus-visible:ring-2`) dan penanganan status `disabled`.
-2. **`FormField` (`src/components/FormField.tsx`):**
-   * Mengintegrasikan elemen `<label>` dengan `id` input secara semantik.
-   * Menampilkan tanda wajib (`*`) dengan atribut `aria-hidden="true"`.
-   * Menyediakan wadah pesan error yang terhubung dengan `role="alert"` dan dihubungkan ke input melalui `aria-describedby`.
-3. **`Badge` (`src/components/Badge.tsx`):**
-   * Menampilkan label status ketersediaan (*Tersedia / Penuh*) dan kategori ruangan.
-   * Menggunakan kombinasi warna kontras tinggi yang ramah pembaca disabilitas penglihatan (*WCAG Compliant*).
-4. **`RoomCard` (`src/components/RoomCard.tsx`):**
-   * Kartu ringkasan ruangan yang memuat gambar representatif, badge ketersediaan, kapasitas maksimal, kecepatan internet, harga sewa per jam, dan dua tombol aksi cepat.
-5. **`Modal` (`src/components/Modal.tsx`):**
-   * Jendela dialog modal yang memenuhi standar aksesibilitas (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`).
-   * Mendukung penutupan via tombol keyboard `Escape` dan klik pada area backdrop.
+### 1. Salin Environment Variables
+```bash
+cp .env.example .env
+```
+*(Secara default, URL koneksi diarahkan ke PostgreSQL lokal Docker pada port 5434)*:
+```env
+DATABASE_URL="postgresql://postgres:postgrespassword@localhost:5434/worknet_db?schema=public"
+```
 
----
+### 2. Nyalakan Database PostgreSQL via Docker
+```bash
+docker compose up -d
+```
 
-## 5. Implementasi Formulir & Validasi Sisi Klien
+### 3. Instal Dependensi Proyek
+```bash
+npm install
+```
 
-Formulir reservasi ruangan berada di file [`src/pages/BookingPage.tsx`](src/pages/BookingPage.tsx) dengan aturan validasi sebagai berikut:
+### 4. Sinkronisasi Database & Jalankan Seeding Data Sintetis
+Jalankan migrasi skema dan pengisian data sintetis:
+```bash
+npx prisma migrate dev
+npx prisma db seed
+```
 
-| Kolom Input | Aturan Validasi | Pesan Kesalahan (*Error Message*) |
-| :--- | :--- | :--- |
-| **Nama Lengkap** | Wajib diisi, minimal 3 karakter | *"Nama lengkap wajib diisi."* / *"Nama lengkap minimal terdiri dari 3 karakter."* |
-| **Alamat Email** | Wajib diisi, format regex email valid | *"Alamat email wajib diisi."* / *"Format email tidak valid (contoh: nama@domain.com)."* |
-| **Nomor Telepon/WA** | Wajib angka, panjang 10–14 digit | *"Nomor WhatsApp / telepon wajib diisi."* / *"Nomor telepon harus antara 10 sampai 14 digit angka."* |
-| **Kategori Pengguna** | Wajib memilih salah satu profil pengguna | *"Silakan pilih kategori peminjam Anda."* |
-| **Pilihan Ruangan** | Ruangan wajib dipilih & status tidak boleh penuh | *"Ruangan wajib dipilih."* / *"Ruangan ini sedang penuh dan tidak dapat dipesan."* |
-| **Tanggal Pemesanan** | Wajib diisi, tidak boleh tanggal lampau ($< \text{hari ini}$) | *"Tanggal pemesanan wajib diisi."* / *"Tanggal pemesanan tidak boleh merupakan tanggal lampau."* |
-| **Jam Mulai & Selesai** | Jam selesai $>$ jam mulai, durasi minimal 1 jam | *"Jam selesai harus lebih akhir dari jam mulai."* / *"Durasi pemesanan minimal adalah 1 jam (60 menit)."* |
-| **Jumlah Peserta** | Minimal 1 orang, tidak boleh melebihi kapasitas ruangan terpilih | *"Jumlah peserta harus minimal 1 orang."* / *"Jumlah peserta (X) melebihi kapasitas [Nama Ruangan] (maks. Y orang)."* |
-| **Persetujuan Ketentuan** | Checkbox syarat & tata tertib wajib dicentang | *"Anda wajib menyetujui tata tertib dan ketentuan gedung WorkNet."* |
+### 5. Jalankan Server Pengembangan Next.js
+```bash
+npm run dev
+```
+Buka peramban di alamat: **`http://localhost:3000/`** (atau port yang ditunjuk terminal).
 
----
-
-## 6. Aksesibilitas Web (A11y) & Desain Responsif
-
-### 6.1 Aksesibilitas
-* **Struktur HTML Semantik:** Menggunakan elemen `<header>`, `<nav>`, `<main>`, `<section>`, `<article>`, `<fieldset>`, `<legend>`, `<label>`, dan `<footer>`.
-* **Navigasi Keyboard:** Tersedia *Skip to Content Link* (`.skip-to-content`) di awal halaman agar pengguna pembaca layar (*screen reader*) dapat melompati navigasi header langsung ke konten utama.
-* **Atribut ARIA Lengkap:** Penerapan `aria-label`, `aria-current`, `aria-invalid`, `aria-describedby`, `role="alert"`, dan `role="dialog"`.
-* **Kontras Warna:** Seluruh teks menggunakan rasio kontras warna tinggi di atas latar belakang putih/abu-abu terang (memenuhi standar WCAG AA dengan skor audit Lighthouse $\ge 85$).
-
-### 6.2 Desain Responsif
-Antarmuka telah diuji dan dirancang adaptif untuk tiga ukuran layar:
-* **Ponsel ($\le 640\text{ px}$):** Menu navigasi otomatis berubah menjadi dropdown hamburger yang mudah dijangkau satu tangan. Layout kartu dan formulir tersusun dalam 1 kolom vertikal.
-* **Tablet ($768\text{ px}$):** Layout grid katalog menampilkan 2 kolom kartu ruangan; input formulir menggunakan grid 2–3 kolom untuk menghemat ruang vertikal.
-* **Desktop ($\ge 1024\text{ px}$):** Navigasi penuh terlihat di header, katalog menampilkan grid 3 kolom kartu, halaman detail dan booking menampilkan layout sidebar ringkasan biaya yang melayang (*sticky position*).
+### 6. Build Produksi
+```bash
+npm run build
+npm run start
+```
 
 ---
 
-## 7. Petunjuk Menjalankan Proyek Secara Lokal
+## 6. Ringkasan Pengujian & Bukti Validasi Server
 
-Pastikan komputer Anda telah terpasang **Node.js** (versi 18 ke atas) dan **npm**.
-
-1. **Clone repository ini:**
-   ```bash
-   git clone <URL_REPOSITORY_ANDA>
-   cd pemweb
-   ```
-
-2. **Instal dependensi proyek:**
-   ```bash
-   npm install
-   ```
-
-3. **Jalankan server pengembangan lokal:**
-   ```bash
-   npm run dev
-   ```
-   Buka peramban (*browser*) pada alamat: `http://localhost:5173/`
-
-4. **Menjalankan pemeriksaan TypeScript & build produksi:**
-   ```bash
-   npm run build
-   ```
-
-5. **Menjalankan linter:**
-   ```bash
-   npm run lint
-   ```
-
----
-
-## 8. Rencana Integrasi Keberlanjutan (Milestone 2 & Seterusnya)
-
-Produk **WorkNet** dirancang dengan struktur data dan alur kerja yang siap dilanjutkan pada tahapan berikutnya:
-1. **Milestone 2 (Backend & Database):**
-   * Mengganti `MOCK_ROOMS` dengan koneksi basis data relasional (misal: PostgreSQL / SQLite).
-   * Membuat endpoint RESTful API untuk ketersediaan slot jam dan pencatatan reservasi.
-   * Menangani *race condition* (mencegah dua pengguna memesan ruangan dan jam yang sama secara bersamaan).
-2. **Integrasi Mata Kuliah Keamanan Siber:**
-   * Penerapan *Role-Based Access Control* (RBAC) membedakan hak akses antara *Penyewa*, *Petugas Resepsionis*, dan *Manajer Gedung*.
-   * Sanitasi masukan (*input sanitization*) dan mitigasi serangan umum seperti XSS, CSRF, dan SQL Injection.
-   * Audit trail logging untuk mencatat aktivitas reservasi dan pembatalan sewa.
-3. **Integrasi Mata Kuliah Kriptografi:**
-   * **Digital Access Pass (QR Code Signature):** Tiket reservasi yang memuat tanda tangan digital berbasis HMAC atau RSA/ECDSA untuk diverifikasi saat penyewa memindai kode di pintu ruangan gedung.
-   * **Enkripsi Data Sensitif (AES-256):** Melindungi data identitas pribadi penyewa dan catatan transaksi pada basis data.
+Dokumentasi lengkap skenario pengujian tersedia di file [`docs/TESTING_SCENARIOS.md`](docs/TESTING_SCENARIOS.md):
+* **10 Skenario Pengujian:** 8 skenario CRUD pada entitas `Room` dan `Booking`, serta 2 skenario pengujian relasi data & *cascade delete*. Seluruh skenario dinyatakan **LULUS (100%)**.
+* **Minimal 3 Bukti Validasi Server (Zod):**
+  1. Penolakan tanggal sewa lampau & jam selesai yang tidak logis (`bookingSchema`).
+  2. Penolakan jumlah peserta melebihi kapasitas maksimal ruangan terpilih.
+  3. Penolakan format email tidak valid dan digit nomor telepon di luar rentang 10–14 digit.
+* **Persistensi Data:** Seluruh mutasi data via antarmuka langsung tersimpan ke PostgreSQL dan tetap utuh saat halaman dimuat ulang.

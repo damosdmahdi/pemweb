@@ -1,0 +1,60 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Room {
+  id              String    @id @default(cuid())
+  name            String
+  category        String    // 'focus' | 'meeting' | 'team' | 'event'
+  categoryLabel   String
+  floor           Int
+  capacity        Int
+  pricePerHour    Int
+  description     String
+  facilities      String[]
+  available       Boolean   @default(true)
+  imageUrl        String
+  area            String
+  wifiSpeed       String
+  powerOutlets    Int
+  hasProjector    Boolean   @default(false)
+  hasWhiteboard   Boolean   @default(false)
+  hasSoundSystem  Boolean   @default(false)
+  hasCoffeeAccess Boolean   @default(true)
+  rules           String[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookings        Booking[]
+
+  @@map("rooms")
+}
+
+model Booking {
+  id            String   @id @default(cuid())
+  bookingCode   String   @unique
+  fullName      String
+  email         String
+  phone         String
+  userCategory  String   // 'freelancer' | 'mahasiswa' | 'komunitas' | 'profesional'
+  date          String   // format YYYY-MM-DD
+  startTime     String   // format HH:mm
+  endTime       String   // format HH:mm
+  durationHours Int
+  attendees     Int
+  totalCost     Int
+  notes         String?
+  status        String   @default("CONFIRMED") // 'CONFIRMED' | 'RESCHEDULED' | 'CANCELLED'
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  roomId        String
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@map("bookings")
+}

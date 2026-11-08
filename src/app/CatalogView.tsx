@@ -1,21 +1,21 @@
+'use client';
+
 import React, { useState, useMemo } from 'react';
-import type { Room, RoomCategory } from '../types';
+import type { Room } from '@prisma/client';
 import { RoomCard } from '../components/RoomCard';
 import { Button } from '../components/Button';
 
-export interface CatalogPageProps {
+export interface CatalogViewProps {
   rooms: Room[];
-  onSelectRoom: (roomId: string) => void;
-  onBookRoom: (roomId: string) => void;
 }
 
-export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, onBookRoom }) => {
-  const [selectedCategory, setSelectedCategory] = useState<RoomCategory>('all');
+export const CatalogView: React.FC<CatalogViewProps> = ({ rooms }) => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [minCapacity, setMinCapacity] = useState<number>(0);
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
 
-  const categories: { id: RoomCategory; label: string }[] = [
+  const categories = [
     { id: 'all', label: 'Semua Ruangan' },
     { id: 'focus', label: 'Focus Pod' },
     { id: 'meeting', label: 'Meeting Room' },
@@ -23,7 +23,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
     { id: 'event', label: 'Event Hall' },
   ];
 
-  // Logika filter ruangan
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
       const matchCategory = selectedCategory === 'all' || room.category === selectedCategory;
@@ -52,7 +51,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
         <div className="max-w-3xl space-y-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-blue-100 backdrop-blur-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400" aria-hidden="true" />
-            Gedung WorkNet Siap Digunakan
+            Data Tersinkronisasi dengan PostgreSQL & Prisma ORM
           </span>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
             Temukan Ruang Kerja Nyaman & Fleksibel di Gedung WorkNet
@@ -65,7 +64,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
 
       {/* Filter & Kontrol Pencarian */}
       <section className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4" aria-label="Filter Katalog Ruangan">
-        {/* Baris Atas: Kategori Pill Buttons */}
+        {/* Kategori Pill Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {categories.map((cat) => (
             <button
@@ -86,7 +85,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
 
         {/* Baris Bawah: Input Cari, Dropdown Kapasitas, dan Checkbox Ketersediaan */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
-          {/* Input Pencarian */}
           <div className="lg:col-span-2">
             <label htmlFor="search-input" className="sr-only">
               Cari nama atau fasilitas ruangan
@@ -108,7 +106,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
             </div>
           </div>
 
-          {/* Filter Kapasitas */}
           <div>
             <label htmlFor="capacity-filter" className="sr-only">
               Filter Minimal Kapasitas
@@ -127,7 +124,6 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
             </select>
           </div>
 
-          {/* Checkbox Ketersediaan */}
           <div className="flex items-center px-1">
             <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
               <input
@@ -149,19 +145,14 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({ rooms, onSelectRoom, o
             Daftar Ruangan Workspace
           </h2>
           <span className="text-xs text-slate-500">
-            Menampilkan <strong>{filteredRooms.length}</strong> dari {rooms.length} ruangan
+            Menampilkan <strong>{filteredRooms.length}</strong> dari {rooms.length} ruangan di database
           </span>
         </div>
 
         {filteredRooms.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredRooms.map((room) => (
-              <RoomCard
-                key={room.id}
-                room={room}
-                onSelectRoom={onSelectRoom}
-                onBookRoom={onBookRoom}
-              />
+              <RoomCard key={room.id} room={room} />
             ))}
           </div>
         ) : (

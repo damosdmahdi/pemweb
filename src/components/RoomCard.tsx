@@ -1,15 +1,13 @@
 import React from 'react';
-import type { Room } from '../types';
+import Link from 'next/link';
+import type { Room } from '@prisma/client';
 import { Badge } from './Badge';
-import { Button } from './Button';
 
 export interface RoomCardProps {
   room: Room;
-  onSelectRoom: (roomId: string) => void;
-  onBookRoom: (roomId: string) => void;
 }
 
-export const RoomCard: React.FC<RoomCardProps> = ({ room, onSelectRoom, onBookRoom }) => {
+export const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
   return (
     <article className="flex flex-col bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow">
       {/* Gambar Ruangan */}
@@ -45,16 +43,26 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onSelectRoom, onBookRo
         <div className="flex items-center gap-4 text-xs text-slate-600 border-t border-b border-slate-100 py-3 mb-4">
           <div className="flex items-center gap-1.5">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+              />
             </svg>
             <span>Maks. <strong>{room.capacity}</strong> Orang</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+              />
             </svg>
-            <span>{room.specifications.wifiSpeed}</span>
+            <span>{room.wifiSpeed}</span>
           </div>
         </div>
 
@@ -69,23 +77,32 @@ export const RoomCard: React.FC<RoomCardProps> = ({ room, onSelectRoom, onBookRo
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onSelectRoom(room.id)}
+            <Link
+              href={`/rooms/${room.id}`}
+              className="inline-flex items-center justify-center font-medium rounded-lg transition-colors border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label={`Lihat detail lengkap ruangan ${room.name}`}
             >
               Lihat Detail
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!room.available}
-              onClick={() => onBookRoom(room.id)}
-              aria-label={room.available ? `Pesan ruangan ${room.name}` : `Ruangan ${room.name} sedang penuh`}
-            >
-              {room.available ? 'Pesan Sekarang' : 'Penuh'}
-            </Button>
+            </Link>
+
+            {room.available ? (
+              <Link
+                href={`/booking?roomId=${room.id}`}
+                className="inline-flex items-center justify-center font-medium rounded-lg transition-colors bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                aria-label={`Pesan ruangan ${room.name}`}
+              >
+                Pesan Sekarang
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center justify-center font-medium rounded-lg bg-slate-200 text-slate-500 text-xs px-3 py-2 cursor-not-allowed"
+                aria-label={`Ruangan ${room.name} sedang penuh`}
+              >
+                Penuh
+              </button>
+            )}
           </div>
         </div>
       </div>
